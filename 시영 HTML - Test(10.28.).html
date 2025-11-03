@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>경영평가 실적 데이터 입력</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+      body{font-family:'Inter',sans-serif;background:#f3f4f6;display:flex;justify-content:center;align-items:center;min-height:100vh}
+      @keyframes fade-in{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes fade-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(20px)}}
+      .animate-fade-in{animation:fade-in .5s ease-out forwards}
+      .animate-fade-out{animation:fade-out .5s ease-out forwards}
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+  <div class="bg-white shadow-xl rounded-2xl p-8 max-w-2xl w-full border border-gray-200">
+    <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">경영평가 실적 데이터 입력</h1>
+    <p class="text-center text-gray-500 mb-8">평가 항목과 실적 데이터를 입력해주세요.</p>
+
+    <form id="evaluationForm" class="space-y-6">
+      <!-- 1. 대주제 -->
+      <div>
+        <label for="mainSubject" class="block text-sm font-medium text-gray-700 mb-2">대주제</label>
+        <select id="mainSubject" name="mainSubject" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-base">
+          <option value="" disabled selected>대주제를 선택해주세요</option>
+          <option value="subject1">I. 리더십</option>
+          <option value="subject2">II. 경영시스템</option>
+          <option value="subject3">III. 일자리 확대</option>
+          <option value="subject4">IV. 사회적 책임</option>
+          <option value="subject5">V. 사업성과 적절성</option>
+          <option value="subject6">VI. 기관별 사업성과</option>
+        </select>
+      </div>
+
+      <!-- 2. 소주제 -->
+      <div id="subSubjectContainer" class="hidden">
+        <label for="subSubject" class="block text-sm font-medium text-gray-700 mb-2">소주제</label>
+        <select id="subSubject" name="subSubject" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-base"></select>
+      </div>
+
+      <!-- 3. 평가지표 -->
+      <div id="indicatorContainer" class="hidden">
+        <label for="indicatorSelect" class="block text-sm font-medium text-gray-700 mb-2">평가지표</label>
+        <select id="indicatorSelect" name="indicator" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-base"></select>
+      </div>
+
+      <!-- 4. 동적 입력 영역 -->
+      <div id="dataInputContainer">
+        <p class="text-gray-400 text-sm text-center">위에 있는 '소주제'와 '평가지표'를 먼저 선택해주세요.</p>
+      </div>
+
+      <div>
+        <button type="submit" id="submitBtn" class="w-full flex justify-center py-3 px-4 rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          데이터 제출
+        </button>
+        <div id="statusMessage" class="mt-4 text-center text-sm font-medium text-gray-600"></div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const evaluationForm = document.getElementById('evaluationForm');
+    const mainSubjectSelect = document.getElementById('mainSubject');
+    const subSubjectContainer = document.getElementById('subSubjectContainer');
+    const subSubjectSelect = document.getElementById('subSubject');
+    const indicatorContainer = document.getElementById('indicatorContainer');
+    const indicatorSelect = document.getElementById('indicatorSelect');
+    const dataInputContainer = document.getElementById('dataInputContainer');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusMessage = document.getElementById('statusMessage');
+
+    // Apps Script WebApp URL
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxjHVGpw2Vwl_sT0ymA7-pBxZKwU0kmdIQPTllEJqfVHbWKQFFeGe5sXAuNgi3IG1pxkg/exec';
+
+    // ===== 데이터 정의 (원본 구조 복원) =====
+    const evaluationItems = {
+      subject1:{name:'I. 리더십',sub:[
+        {name:'1. 경영층의 리더십',indicators:[
+          {name:'1-1. 기관의 사명과 사회적 역할 파악, 경영목표 달성 위한 경영층의 리더십',type:'qualitative'},
+          {name:'1-2. 경영목표 달성을 위한 노력과 성과',type:'qualitative'}]},
+        {name:'2. 전략경영',indicators:[
+          {name:'2-1. 중장기전략 수립의 타당성',type:'qualitative'},
+          {name:'2-2. 조직자원 배분·관리 및 사업추진과정 점검',type:'qualitative'}]},
+        {name:'3. 경영평가 개선 권고사항 이행실적',indicators:[{name:'3-1. 전년도 경영평가 지적사항 이행률',type:'custom-management'}]},
+        {name:'4. 외부감사 지적사항 이행실적',indicators:[{name:'4-1. 전년도 외부감사 지적사항 이행률',type:'custom-audit'}]}
+      ]},
+      subject2:{name:'II. 경영시스템',sub:[
+        {name:'1. 조직·인사관리의 적정성',indicators:[
+          {name:'1-1. 경영전략과 연계된 조직구조의 적정성',type:'qualitative'},
+          {name:'1-2. 인사관리의 합리성, 공정성 확보를 위한 노력과 성과',type:'qualitative'},
+          {name:'1-3. 직원역량 제고를 위한 노력과 성과',type:'qualitative'},
+          {name:'1-4. 성과관리 및 보상체계 구축의 적정성',type:'qualitative'}]},
+        {name:'2. 지원기능 인력 비율',indicators:[{name:'2-1. (지원기능인력/정원)x100',type:'quantitative'}]},
+        {name:'3. 관리직 인력 비율',indicators:[{name:'3-1. (관리인력/정원)x100',type:'quantitative'}]},
+        {name:'4. 외부전문가 구성 및 참여율',indicators:[
+          {name:'4-1. 시험위원회 외부전문가 구성비율',type:'quantitative'},
+          {name:'4-2. 시험위원회 외부전문가 참여율',type:'quantitative'},
+          {name:'4-3. 인사위원회 외부전문가 구성비율',type:'quantitative'},
+          {name:'4-4. 인사위원회 외부전문가 참여율',type:'quantitative'}]},
+        {name:'5. 임·직원 교육실적',indicators:[
+          {name:'5-1. 임직원 1인당 외부교육 실적',type:'quantitative'},
+          {name:'5-2. 임직원 1인당 내부교육 실적',type:'quantitative'}]},
+        {name:'6. 재정·예산관리의 적정성',indicators:[
+          {name:'6-1. 재정계획의 적정성',type:'qualitative'},
+          {name:'6-2. 예산운용 및 집행의 적정성',type:'qualitative'},
+          {name:'6-3. 기관의 특성을 반영한 재정건전성 확보를 위한 노력과 성과',type:'qualitative'}]},
+        {name:'7. 자체수입률',indicators:[{name:'7-1. (자체수입액/총수입액)x100',type:'quantitative'}]},
+        {name:'8. 일반관리비 충당률',indicators:[{name:'8-1. (자체수입액/총운영경영비)x100',type:'quantitative'}]},
+        {name:'9. 복리후생비 집행 및 공개',indicators:[{name:'9-1. (복리후생비 집행액/편성액)x100',type:'quantitative'},{name:'9-2. 복리후생비 공개실적',type:'qualitative'}]},
+        {name:'10. 업무추진비 집행 및 공개',indicators:[{name:'10-1. (업무추진비 집행액/편성액)x100',type:'quantitative'},{name:'10-2. 업무추진비 공개실적',type:'qualitative'}]},
+        {name:'11. 조달계약 실적',indicators:[{name:'11-1. (조달계약금액/총계약액)x100',type:'quantitative'}]}
+      ]},
+      subject3:{name:'III. 일자리 확대',sub:[
+        {name:'1. 일자리 창출 및 질 개선 노력',indicators:[
+          {name:'1-1. 청년 의무고용률 달성도',type:'quantitative'},
+          {name:'1-2. 일자리 창출을 위한 노력',type:'qualitative'},
+          {name:'1-3. 근로환경 개선 노력',type:'qualitative'}]}
+      ]},
+      subject4:{name:'IV. 사회적 책임',sub:[
+        {name:'1. 소통 및 참여',indicators:[
+          {name:'1-1. 고객 및 주민의 경영참여 등 의견 적극 수렴과 기관 경영에 적극 반영 여부',type:'qualitative'},
+          {name:'1-2. 상생과 협력의 공공노사관계 구축 및 유지 노력의 적정성',type:'qualitative'}]},
+        {name:'2. 경영공시 및 통합공시',indicators:[
+          {name:'2-1. 경영공시 기준에 따른 공시항목, 자료입력기한 준수여부',type:'qualitative'},
+          {name:'2-2. 통합공시 기준에 따른 공시항목, 자료입력기한 준수여부',type:'qualitative'},
+          {name:'2-3. ESG 경영선도 관련 통합공시 기준개정사항 준수여부',type:'qualitative'}]},
+        {name:'3. 윤리경영',indicators:[
+          {name:'3-1. 윤리경영체제의 적정성',type:'qualitative'},
+          {name:'3-2. 기관의 투명성과 경영 책임성을 높이기 위한 기관관리 개선노력과 성과',type:'qualitative'}]},
+        {name:'4. 인권경영',indicators:[
+          {name:'4-1. 인권경영 체제 구축의 노력과 성과',type:'qualitative'},
+          {name:'4-2. 인권경영(사업)의 실행 공개 노력과 성과 및 구제절차 제도화의 타당성',type:'qualitative'},
+          {name:'4-3. 공정사회 구현을 위한 노력과 성과의 적절성',type:'qualitative'}]},
+        {name:'5. 재난·안전관리',indicators:[{name:'5-1. 안전문화 정착을 위한 직원 대응력 제고',type:'qualitative'},{name:'5-2. 재난·안전 관리역량',type:'qualitative'}]},
+        {name:'6. 지역상생 발전',indicators:[
+          {name:'6-1. 지역경제 공헌 및 지역사회·문화 활성화 등의 발전을 위한 공익사업 추진실적',type:'qualitative'},
+          {name:'6-2. 중소기업제품 등 사회적 약자 구매',type:'quantitative'},
+          {name:'6-3. 중증장애인생산품 구매실적',type:'quantitative'},
+          {name:'6-4. 장애인 의무고용제 준수 여부',type:'quantitative'}]}
+      ]},
+      subject5:{name:'V. 사업성과 적절성',sub:[
+        {name:'1. 고유사업 목표의 적정성 및 달성 정도',indicators:[
+          {name:'1-1. 환경변화에 대응하기 위한 사업계획 타당하게 수립여부',type:'qualitative'},
+          {name:'1-2. 사업 수행능력 적정성',type:'qualitative'},
+          {name:'1-3. 사업 환류활동 적정성',type:'qualitative'}]}
+      ]},
+      subject6:{name:'VI. 기관별 사업성과',sub:[
+        {name:'1. 청소년시설 이용 및 프로그램 운영 실적',indicators:[
+          {name:'1-1. 청소년 이용률',type:'quantitative'},
+          {name:'1-2. 프로그램 이용자 수',type:'quantitative'},
+          {name:'1-3. 대외입상실적',type:'custom-award'}]},
+        {name:'2. 청소년주도성 강화를 위한 참여 실적',indicators:[
+          {name:'2-1. 청소년참여기구 운영 실적 (회의, 활동 실적)',type:'custom-youth-participation'},
+          {name:'2-2. 청소년정책제안 건수',type:'custom-youth-policy'}]},
+        {name:'3. 청소년 보호 및 자립 지원 실적',indicators:[
+          {name:'3-1. 방과후 아카데미 협력네트워크 구축 (회의, 간담회, 워크숍, 협약, 공동주관 및 지원 사업)',type:'custom-afterschool'},
+          {name:'3-2. 프로그램 만족도(종합적 만족도)',type:'custom-satisfaction'},
+          {name:'3-3. 위기청소년 상담·심리 제공 실적',type:'custom-crisis-counseling'},
+          {name:'3-4. 학교 밖 청소년 지원서비스 건수',type:'custom-out-of-school'}]},
+        {name:'4. 협력네트워크 구축 및 운영 실적',indicators:[
+          {name:'4-1. 교류실적 및 참여자 수 (회의,간담회,워크숍,협약,공동주관사업)',type:'custom-collaboration-network'}]}
+      ]}
+    };
+
+    // ===== Helper =====
+    const getEvaluationType = (mainSubject, subSubjectName, indicatorName) => {
+      const subItems = evaluationItems[mainSubject]?.sub || [];
+      const subItem = subItems.find(s => s.name === subSubjectName);
+      const indicator = subItem?.indicators.find(i => i.name === indicatorName);
+      return indicator?.type || null;
+    };
+
+    // ===== 이벤트: 대주제 변경 =====
+    mainSubjectSelect.addEventListener('change', (e) => {
+      const selected = e.target.value;
+      const subjects = evaluationItems[selected]?.sub || [];
+
+      subSubjectSelect.innerHTML = '';
+      indicatorSelect.innerHTML = '';
+
+      if (subjects.length === 0) {
+        subSubjectContainer.classList.add('hidden');
+        indicatorContainer.classList.add('hidden');
+        dataInputContainer.innerHTML = '<p class="text-gray-400 text-sm text-center">대주제를 먼저 선택해주세요.</p>';
+        return;
+      }
+
+      subSubjectContainer.classList.remove('hidden');
+      const def = document.createElement('option');
+      def.value=''; def.disabled=true; def.selected=true; def.textContent='소주제를 선택해주세요';
+      subSubjectSelect.appendChild(def);
+      subjects.forEach(sub=>{
+        const opt=document.createElement('option');
+        opt.value=sub.name; opt.textContent=sub.name; subSubjectSelect.appendChild(opt);
+      });
+
+      indicatorContainer.classList.add('hidden');
+      dataInputContainer.innerHTML = '<p class="text-gray-400 text-sm text-center">위에 있는 \'소주제\'와 \'평가지표\'를 먼저 선택해주세요.</p>';
+    });
+
+    // ===== 이벤트: 소주제 변경 =====
+    subSubjectSelect.addEventListener('change', (e) => {
+      const mainKey = mainSubjectSelect.value;
+      const subName = e.target.value;
+      const subItem = evaluationItems[mainKey]?.sub.find(s=>s.name===subName);
+      const indicators = subItem?.indicators || [];
+
+      indicatorSelect.innerHTML='';
+      if (indicators.length===0){
+        indicatorContainer.classList.add('hidden');
+        dataInputContainer.innerHTML='<p class="text-gray-400 text-sm text-center">평가지표가 없습니다.</p>';
+        return;
+      }
+      indicatorContainer.classList.remove('hidden');
+      const def=document.createElement('option');
+      def.value=''; def.disabled=true; def.selected=true; def.textContent='평가지표를 선택해주세요';
+      indicatorSelect.appendChild(def);
+      indicators.forEach(ind=>{
+        const opt=document.createElement('option'); opt.value=ind.name; opt.textContent=ind.name; indicatorSelect.appendChild(opt);
+      });
+      dataInputContainer.innerHTML='<p class="text-gray-400 text-sm text-center">위에 있는 \'평가지표\'를 먼저 선택해주세요.</p>';
+    });
+
+    // ===== 이벤트: 평가지표 변경 =====
+    indicatorSelect.addEventListener('change', (e) => {
+      const mainKey = mainSubjectSelect.value;
+      const subName = subSubjectSelect.value;
+      const indName = e.target.value;
+      const type = getEvaluationType(mainKey, subName, indName);
+      updateInput(type, indName);
+    });
+
+    // ===== 동적 입력 렌더 =====
+    const updateInput = (type, indicatorName) => {
+      dataInputContainer.innerHTML='';
+      if(!type){
+        dataInputContainer.innerHTML='<p class="text-gray-400 text-sm text-center">평가지표가 유효하지 않습니다.</p>';
+        return;
+      }
+
+      if(type==='qualitative'){
+        const wrap=document.createElement('div'); wrap.id='qualitative-items-container';
+        const addBtn=document.createElement('button'); addBtn.type='button'; addBtn.textContent='정성 평가 데이터 추가하기'; addBtn.className='w-full flex justify-center py-2 px-4 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 mt-4';
+        const mk=()=>{
+          const box=document.createElement('div'); box.className='border border-gray-300 rounded-lg p-4 space-y-4 bg-gray-50 mb-4';
+          const lab=document.createElement('label'); lab.className='block text-sm font-medium text-gray-700 mb-2'; lab.textContent='정성 평가 데이터';
+          const ta=document.createElement('textarea'); ta.name='qualitative_data[]'; ta.rows=4; ta.placeholder='예시: 7월 31일 2026년 지역사회 간담회'; ta.className='mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg'; ta.required=true;
+          const rm=document.createElement('button'); rm.type='button'; rm.textContent='삭제'; rm.className='mt-2 text-red-600 text-sm font-medium'; rm.onclick=()=>box.remove();
+          box.append(lab,ta,rm); wrap.appendChild(box);
+        };
+        addBtn.addEventListener('click',mk);
+        dataInputContainer.append(wrap,addBtn);
+        return;
+      }
+
+      if(type==='quantitative'){
+        const lbl=document.createElement('label'); lbl.className='block text-sm font-medium text-gray-700 mt-4 mb-2'; lbl.textContent='정량 데이터 유형';
+        const sel=document.createElement('select'); sel.id='quantitativeType'; sel.name='quantitativeType'; sel.required=true; sel.className='mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg';
+        sel.innerHTML=`<option value="" disabled selected>유형을 선택해주세요</option>
+                       <option value="monthly">월별 데이터</option>
+                       <option value="freeform">자유 입력 데이터</option>`;
+        const inner=document.createElement('div'); inner.id='quantitativeInputContainer'; inner.className='mt-4'; inner.innerHTML='<p class="text-gray-400 text-sm text-center">위에 있는 \'정량 데이터 유형\'을 선택해주세요.</p>';
+        sel.addEventListener('change',()=>{
+          inner.innerHTML='';
+          if(sel.value==='monthly'){
+            const grid=document.createElement('div'); grid.className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4';
+            for(let i=1;i<=12;i++){
+              const d=document.createElement('div'); d.className='p-3 border rounded-lg bg-gray-100';
+              d.innerHTML=`<h4 class="font-semibold text-center text-sm mb-2">${i}월</h4><input type="number" step="any" name="monthly_data_${i}" class="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="데이터 입력">`;
+              grid.appendChild(d);
+            }
+            inner.appendChild(grid);
+          }else if(sel.value==='freeform'){
+            const l=document.createElement('label'); l.className='block text-sm font-medium text-gray-700 mb-2'; l.textContent='자유 입력 데이터';
+            const inp=document.createElement('input'); inp.type='number'; inp.name='data'; inp.placeholder='예: 500'; inp.className='mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg'; inp.required=true; inp.step='any';
+            inner.append(l,inp);
+          }
+        });
+        dataInputContainer.append(lbl,sel,inner); return;
+      }
+
+      // ===== 커스텀 타입들 =====
+      if(type==='custom-satisfaction'){
+        const affiliations=['월곶','목감','배곧1','배곧2'];
+        const wrap=document.createElement('div');
+        const lab=document.createElement('label'); lab.className='block text-sm font-medium text-gray-700 mb-2'; lab.textContent='소속';
+        const sel=document.createElement('select'); sel.id='satisfactionAffiliation'; sel.name='satisfactionAffiliation'; sel.required=true; sel.className='mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg mb-4';
+        sel.innerHTML='<option value="" disabled selected>소속을 선택해주세요</option>';
+        affiliations.forEach(a=>{const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o);});
+        const dl=document.createElement('label'); dl.className='block text-sm font-medium text-gray-700 mb-2'; dl.textContent='만족도(숫자입력)';
+        const di=document.createElement('input'); di.type='number'; di.id='satisfactionData'; di.name='satisfactionData'; di.placeholder='예: 95.5'; di.className='mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg'; di.required=true; di.step='any';
+        wrap.append(lab,sel,dl,di); dataInputContainer.appendChild(wrap); return;
+      }
+
+      if(type==='custom-crisis-counseling'){
+        const grid=document.createElement('div'); grid.className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4';
+        for(let i=1;i<=12;i++){
+          const d=document.createElement('div'); d.className='p-3 border rounded-lg bg-gray-100';
+          d.innerHTML=`<h4 class="font-semibold text-center text-sm mb-2">${i}월</h4><input type="number" step="any" name="counseling_${i}" class="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="건수">`;
+          grid.appendChild(d);
+        }
+        dataInputContainer.appendChild(grid); return;
+      }
+
+      if(type==='custom-out-of-school'){
+        const grid=document.createElement('div'); grid.className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4';
+        for(let i=1;i<=12;i++){
+          const d=document.createElement('div'); d.className='p-3 border rounded-lg bg-gray-100';
+          d.innerHTML=`<h4 class="font-semibold text-center text-sm mb-2">${i}월</h4><input type="number" step="any" name="out_of_school_services_${i}" class="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="건수">`;
+          grid.appendChild(d);
+        }
+        dataInputContainer.appendChild(grid); return;
+      }
+
+      if(type==='custom-youth-participation'){
+        const affiliations=['청참위','수련관','은행','연성','목감','능곡','월곶','정왕','꾸미','배곧1','배곧2'];
+        const box=document.createElement('div');
+        const lab=document.createElement('label'); lab.className='block text-sm font-medium text-gray-700 mb-2'; lab.textContent='소속';
+        const sel=document.createElement('select'); sel.id='youthAffiliation'; sel.name='youthAffiliation'; sel.required=true; sel.className='mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg mb-4';
+        sel.innerHTML='<option value="" disabled selected>소속을 선택해주세요</option>';
+        affiliations.forEach(a=>{const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o);});
+        const grid=document.createElement('div'); grid.className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-4';
+        for(let i=1;i<=12;i++){
+          const d=document.createElement('div'); d.className='p-3 border rounded-lg bg-gray-100';
+          d.innerHTML=`<h4 class="font-semibold text-center text-sm mb-2">${i}월</h4>
+            <div><label class="block text-xs font-medium text-gray-600">회의</label><input type="number" step="any" name="meeting_month_${i}" class="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="수"></div>
+            <div class="mt-2"><label class="block text-xs font-medium text-gray-600">활동</label><input type="number" step="any" name="activity_month_${i}" class="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="수"></div>`;
+          grid.appendChild(d);
+        }
+        box.append(lab,sel,grid); dataInputContainer.appendChild(box); return;
+      }
+
+      if(type==='custom-afterschool'){
+        const affiliations=['월곶','목감','배곧1','배곧2'];
+        const dataLabels=['회의','간담회','워크숍','협약','공동사업','지원사업'];
+        const wrap=document.createElement('div');
+        const lab=document.createElement('label'); lab.className='block text-sm font-medium text-gray-700 mb-2'; lab.textContent='소속';
+        const sel=document.createElement('select'); sel.id='afterschoolAffiliation'; sel.name='afterschoolAffiliation'; sel.required=true; sel.className='mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg mb-4';
+        sel.innerHTML='<option value="" disabled selected>소속을 선택해주세요</option>';
+        affiliations.forEach(a=>{const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o);});
+        const sections=document.createElement('div'); sections.className='space-y-4';
+        dataLabels.forEach(label=>{
+          const sec=document.createElement('div'); sec.className='border border-gray-300 rounded-lg p-4 bg-gray-50';
+          sec.innerHTML=`<h4 class="font-semibold text-lg text-gray-800 mb-4">${label}</h4>`;
+          const grid=document.createElement('div'); grid.className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4';
+          for(let i=1;i<=12;i++){
+            const d=document.createElement('div'); d.className='p-2 border rounded-lg bg-white';
+            d.innerHTML=`<h5 class="font-medium text-center text-sm mb-1">${i}월</h5><input type="number" step="any" name="afterschool_${label}_${i}" class="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="건수">`;
+            grid.appendChild(d);
+          }
+          sec.appendChild(grid); sections.appendChild(sec);
+        });
+        wrap.append(lab,sel,sections); dataInputContainer.appendChild(wrap); return;
+      }
+
+      if(type==='custom-youth-policy'){
+        const affiliations=['청참위','수련관','은행','연성','목감','능곡','월곶','정왕','꾸미','배곧1','배곧2'];
+        const container=document.createElement('div'); container.id='policy-proposals-container';
+        const btn=document.createElement('button'); btn.type='button'; btn.textContent='정책 제안 추가하기'; btn.className='w-full flex justify-center py-2 px-4 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 mt-4';
+        const mk=()=>{
+          const box=document.createElement('div'); box.className='border border-gray-300 rounded-lg p-4 space-y-4 bg-gray-50 mb-4';
+          const al=document.createElement('label'); al.className='block text-sm font-medium text-gray-700'; al.textContent='소속';
+          const asel=document.createElement('select'); asel.name='policy_affiliation[]'; asel.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; asel.required=true;
+          asel.innerHTML='<option value="" disabled selected>선택</option>';
+          affiliations.forEach(a=>{const o=document.createElement('option'); o.value=a; o.textContent=a; asel.appendChild(o);});
+          const cl=document.createElement('label'); cl.className='block text-sm font-medium text-gray-700'; cl.textContent='반영 내용 (수기입력)';
+          const ct=document.createElement('textarea'); ct.name='policy_content[]'; ct.rows=2; ct.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; ct.required=true;
+          const sl=document.createElement('label'); sl.className='block text-sm font-medium text-gray-700'; sl.textContent='반영 여부 (선택)';
+          const ss=document.createElement('select'); ss.name='policy_status[]'; ss.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; ss.required=true;
+          ss.innerHTML=`<option value="" disabled selected>선택</option><option value="reflected">반영</option><option value="not_reflected">미반영</option><option value="scheduled">예정</option>`;
+          const dl=document.createElement('label'); dl.className='block text-sm font-medium text-gray-700'; dl.textContent='반영 결과 증빙문서 (예: 경영지원본부-1370)';
+          const di=document.createElement('input'); di.type='text'; di.name='policy_document[]'; di.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; di.required=true;
+          const rm=document.createElement('button'); rm.type='button'; rm.textContent='삭제'; rm.className='mt-2 text-red-600 text-sm font-medium'; rm.onclick=()=>box.remove();
+          box.append(al,asel,cl,ct,sl,ss,dl,di,rm); container.appendChild(box);
+        };
+        btn.addEventListener('click',mk); dataInputContainer.append(container,btn); return;
+      }
+
+      if(type==='custom-award'){
+        const container=document.createElement('div'); container.id='awards-container';
+        const btn=document.createElement('button'); btn.type='button'; btn.textContent='포상 추가하기'; btn.className='w-full flex justify-center py-2 px-4 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 mt-4';
+        const mk=()=>{
+          const box=document.createElement('div'); box.className='border border-gray-300 rounded-lg p-4 space-y-4 bg-gray-50 mb-4';
+          const cl=document.createElement('label'); cl.className='block text-sm font-medium text-gray-700'; cl.textContent='구분 (해당사항 없을시 기타 선택)';
+          const cs=document.createElement('select'); cs.name='award_category[]'; cs.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; cs.required=true;
+          cs.innerHTML=`<option value="" disabled selected>선택</option><option value="group_foundation">단체-재단</option><option value="group_youth">단체-청소년</option><option value="individual_youth">개인-청소년</option><option value="individual_staff">개인-직원</option><option value="program">프로그램</option><option value="etc">기타</option>`;
+          const tl=document.createElement('label'); tl.className='block text-sm font-medium text-gray-700'; tl.textContent='대상자-소속,이름 (예시: 수련관 청운위 홍길동)';
+          const ti=document.createElement('input'); ti.type='text'; ti.name='award_target[]'; ti.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; ti.required=true;
+          const nl=document.createElement('label'); nl.className='block text-sm font-medium text-gray-700'; nl.textContent='수상내용 (예시: 경기도 예술제 밴드 장려상)';
+          const nt=document.createElement('textarea'); nt.name='award_content[]'; nt.rows=2; nt.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; nt.required=true;
+          const ml=document.createElement('label'); ml.className='block text-sm font-medium text-gray-700'; ml.textContent='훈격 (예시: 경기도지사상)';
+          const mi=document.createElement('input'); mi.type='text'; mi.name='award_medal[]'; mi.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; mi.required=true;
+          const dl=document.createElement('label'); dl.className='block text-sm font-medium text-gray-700'; dl.textContent='수상일 (날짜 선택)';
+          const di=document.createElement('input'); di.type='date'; di.name='award_date[]'; di.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; di.required=true;
+          const al=document.createElement('label'); al.className='block text-sm font-medium text-gray-700'; al.textContent='소속 (본부 선택)';
+          const as=document.createElement('select'); as.name='award_affiliation[]'; as.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; as.required=true;
+          as.innerHTML=`<option value="" disabled selected>선택</option>
+                         <option value="policy_planning">정책기획</option>
+                         <option value="integrity_audit">청렴감사</option>
+                         <option value="management_hq">경영본부</option>
+                         <option value="youth_center">수련관</option>
+                         <option value="branch_1">1본부</option>
+                         <option value="branch_2">2본부</option>
+                         <option value="branch_3">3본부</option>
+                         <option value="branch_4">4본부</option>`;
+          const rm=document.createElement('button'); rm.type='button'; rm.textContent='삭제'; rm.className='mt-2 text-red-600 text-sm font-medium'; rm.onclick=()=>box.remove();
+          box.append(cl,cs,tl,ti,nl,nt,ml,mi,dl,di,al,as,rm); container.appendChild(box);
+        };
+        btn.addEventListener('click',mk); dataInputContainer.append(container,btn); return;
+      }
+
+      if(type==='custom-collaboration-network'){
+        const container=document.createElement('div'); container.id='collaboration-records-container';
+        const btn=document.createElement('button'); btn.type='button'; btn.textContent='내역 추가 하기'; btn.className='w-full flex justify-center py-2 px-4 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 mt-4';
+        const mk=()=>{
+          const box=document.createElement('div'); box.className='border border-gray-300 rounded-lg p-4 space-y-4 bg-gray-50 mb-4';
+          const cl=document.createElement('label'); cl.className='block text-sm font-medium text-gray-700'; cl.textContent='구분';
+          const cs=document.createElement('select'); cs.name='collaboration_category[]'; cs.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; cs.required=true;
+          cs.innerHTML=`<option value="" disabled selected>선택</option><option value="회의">회의</option><option value="간담회">간담회</option><option value="워크숍">워크숍</option><option value="협약">협약</option><option value="공동주관사업">공동주관사업</option>`;
+          const al=document.createElement('label'); al.className='block text-sm font-medium text-gray-700 mt-4'; al.textContent='소속기관';
+          const as=document.createElement('select'); as.name='collaboration_affiliation[]'; as.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md'; as.required=true;
+          as.innerHTML=`<option value="" disabled selected>선택</option><option value="수련관">수련관</option><option value="은행">은행</option><option value="목감">목감</option><option value="연성">연성</option><option value="매화">매화</option><option value="능곡">능곡</option><option value="월곶">월곶</option><option value="군자">군자</option><option value="정왕">정왕</option><option value="꾸미">꾸미</option><option value="배곧1">배곧1</option><option value="배곧2">배곧2</option><option value="상담">상담</option><option value="학교밖">학교밖</option>`;
+          const datesWrap=document.createElement('div'); datesWrap.className='space-y-2 mt-4'; datesWrap.innerHTML='<label class="block text-sm font-medium text-gray-700">일자</label>';
+          const addDate=(parent)=>{ const row=document.createElement('div'); row.className='flex items-center space-x-2'; row.innerHTML='<input type="date" name="collaboration_dates[]" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md"><button type="button" class="text-red-600 text-xl font-bold">-</button>'; parent.appendChild(row); row.querySelector('button').onclick=()=>row.remove(); };
+          const addDateBtn=document.createElement('button'); addDateBtn.type='button'; addDateBtn.textContent='날짜 추가'; addDateBtn.className='text-blue-600 hover:text-blue-800 text-sm font-medium'; addDateBtn.onclick=(e)=>{e.preventDefault(); addDate(datesWrap);};
+          addDate(datesWrap);
+          const dl=document.createElement('label'); dl.className='block text-sm font-medium text-gray-700 mt-4'; dl.textContent='증빙문서 (예:경영지원본부-1234)';
+          const di=document.createElement('input'); di.type='text'; di.name='collaboration_document[]'; di.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md';
+          const clb=document.createElement('label'); clb.className='block text-sm font-medium text-gray-700 mt-4'; clb.textContent='내용 (수기입력)';
+          const ct=document.createElement('textarea'); ct.name='collaboration_content[]'; ct.rows=2; ct.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md';
+          const pl=document.createElement('label'); pl.className='block text-sm font-medium text-gray-700 mt-4'; pl.textContent='참여인원 (전체회기 참여 총인원)';
+          const pi=document.createElement('input'); pi.type='number'; pi.name='collaboration_participants[]'; pi.step='any'; pi.className='mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md';
+          const rm=document.createElement('button'); rm.type='button'; rm.textContent='삭제'; rm.className='mt-4 text-red-600 text-sm font-medium'; rm.onclick=()=>box.remove();
+          box.append(cl,cs,al,as,datesWrap,addDateBtn,dl,di,clb,ct,pl,pi,rm); container.appendChild(box);
+        };
+        btn.addEventListener('click',mk); dataInputContainer.append(container,btn); return;
+      }
+    };
+
+    // ===== 제출 =====
+    evaluationForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!scriptUrl) {
+        showMessage('⚠️ Google Apps Script URL을 먼저 설정해주세요.', 'bg-yellow-500');
+        return;
+      }
+      submitBtn.disabled = true; submitBtn.textContent = '전송 중...'; statusMessage.textContent='데이터 전송 중입니다.';
+
+      const formData = new FormData(evaluationForm);
+      const data = Object.fromEntries(formData.entries());
+      const finalData = {};
+
+      const selectedIndicator = indicatorSelect.value;
+      const selectedType = getEvaluationType(mainSubjectSelect.value, subSubjectSelect.value, selectedIndicator);
+
+      finalData.mainSubject = data.mainSubject;  // e.g., subject5, subject6
+      finalData.subSubject = data.subSubject;
+      finalData.indicator = data.indicator;
+
+      if(selectedType==='quantitative' && data.quantitativeType==='monthly'){
+        const monthlyValues={}; for(let i=1;i<=12;i++){ monthlyValues[i]=formData.get(`monthly_data_${i}`)||''; }
+        finalData.data={type:'monthly',values:monthlyValues};
+      } else if(selectedType==='qualitative'){
+        finalData.data=formData.getAll('qualitative_data[]');
+      } else if(selectedIndicator==='2-1. 청소년참여기구 운영 실적 (회의, 활동 실적)'){
+        const monthlyData={meetings:{},activities:{}}; for(let i=1;i<=12;i++){ monthlyData.meetings[`month_${i}`]=formData.get(`meeting_month_${i}`)||0; monthlyData.activities[`month_${i}`]=formData.get(`activity_month_${i}`)||0; }
+        finalData.affiliation=data.youthAffiliation; finalData.data=monthlyData;
+      } else if(selectedIndicator==='3-1. 방과후 아카데미 협력네트워크 구축 (회의, 간담회, 워크숍, 협약, 공동주관 및 지원 사업)'){
+        const labels=['회의','간담회','워크숍','협약','공동사업','지원사업']; const monthlyData={}; labels.forEach(l=>{ monthlyData[l]={}; for(let i=1;i<=12;i++){ monthlyData[l][`month_${i}`]=formData.get(`afterschool_${l}_${i}`)||0; } });
+        finalData.affiliation=data.afterschoolAffiliation; finalData.data=monthlyData;
+      } else if(selectedIndicator==='3-2. 프로그램 만족도(종합적 만족도)'){
+        // ✅ send affiliation & value
+        finalData.data={ affiliation: data.satisfactionAffiliation, value: (data.satisfactionData===''? null : parseFloat(data.satisfactionData)) };
+      } else if(selectedIndicator==='3-3. 위기청소년 상담·심리 제공 실적'){
+        const monthlyData={}; for(let i=1;i<=12;i++){ monthlyData[`month_${i}`]=formData.get(`counseling_${i}`)||0; } finalData.data=monthlyData;
+      } else if(selectedIndicator==='3-4. 학교 밖 청소년 지원서비스 건수'){
+        const monthlyData={}; for(let i=1;i<=12;i++){ monthlyData[`month_${i}`]=formData.get(`out_of_school_services_${i}`)||0; } finalData.data=monthlyData;
+      } else if(selectedIndicator==='4-1. 전년도 외부감사 지적사항 이행률'){
+        const items=[]; const texts=formData.getAll('audit_issue[]'); const stats=formData.getAll('audit_status[]'); const dates=formData.getAll('audit_date[]');
+        for(let i=0;i<texts.length;i++){ items.push({date:dates[i],issue:texts[i],status:stats[i]}); } finalData.data=items;
+      } else if(selectedIndicator==='3-1. 전년도 경영평가 지적사항 이행률'){
+        const items=[]; const texts=formData.getAll('management_issue[]'); const stats=formData.getAll('management_status[]');
+        for(let i=0;i<texts.length;i++){ items.push({issue:texts[i],status:stats[i]}); } finalData.data=items;
+      } else if(selectedIndicator==='1-3. 대외입상실적'){
+        const items=[]; const cats=formData.getAll('award_category[]'); const tg=formData.getAll('award_target[]'); const cont=formData.getAll('award_content[]'); const med=formData.getAll('award_medal[]'); const dates=formData.getAll('award_date[]'); const aff=formData.getAll('award_affiliation[]');
+        for(let i=0;i<cats.length;i++){ items.push({category:cats[i],target:tg[i],content:cont[i],medal:med[i],date:dates[i],affiliation:aff[i]}); } finalData.data=items;
+      } else if(selectedIndicator==='2-2. 청소년정책제안 건수'){
+        const items=[]; const aff=formData.getAll('policy_affiliation[]'); const cont=formData.getAll('policy_content[]'); const st=formData.getAll('policy_status[]'); const doc=formData.getAll('policy_document[]');
+        for(let i=0;i<aff.length;i++){ items.push({affiliation:aff[i],content:cont[i],status:st[i],document:doc[i]}); } finalData.data=items;
+      } else if(selectedIndicator==='4-1. 교류실적 및 참여자 수 (회의,간담회,워크숍,협약,공동주관사업)'){
+        const records=[]; document.querySelectorAll('#collaboration-records-container > div').forEach(div=>{
+          const r={};
+          r.category=div.querySelector('[name="collaboration_category[]"]').value;
+          r.affiliation=div.querySelector('[name="collaboration_affiliation[]"]').value;
+          r.document=div.querySelector('[name="collaboration_document[]"]').value;
+          r.content=div.querySelector('[name="collaboration_content[]"]').value;
+          r.participants=div.querySelector('[name="collaboration_participants[]"]').value;
+          r.dates=[...div.querySelectorAll('[name="collaboration_dates[]"]')].map(i=>i.value);
+          records.push(r);
+        });
+        finalData.data=records;
+      } else {
+        finalData.data=data.data || null;
+      }
+
+      try{
+        const response = await fetch(scriptUrl, { method:'POST', mode:'no-cors', cache:'no-cache', headers:{'Content-Type':'application/json'}, body: JSON.stringify(finalData)});
+        if(response){ showMessage('✅ 데이터가 성공적으로 전송되었습니다.','bg-green-500'); evaluationForm.reset(); subSubjectContainer.classList.add('hidden'); indicatorContainer.classList.add('hidden'); dataInputContainer.innerHTML = '<p class="text-gray-400 text-sm text-center">위에 있는 \'소주제\'와 \'평가지표\'를 먼저 선택해주세요.</p>'; }
+        else{ throw new Error('응답 실패'); }
+      }catch(err){ console.error(err); showMessage('❌ 데이터 전송에 실패했습니다. 콘솔을 확인해주세요.','bg-red-500'); }
+      finally{ submitBtn.disabled=false; submitBtn.textContent='데이터 제출'; statusMessage.textContent=''; }
+    });
+
+    const showMessage=(message,color)=>{
+      const box=document.createElement('div'); box.textContent=message; box.className=`fixed bottom-5 right-5 text-white p-4 rounded-lg shadow-lg animate-fade-in ${color}`; document.body.appendChild(box);
+      setTimeout(()=>{ box.classList.add('animate-fade-out'); box.addEventListener('animationend',()=>box.remove()); },3000);
+    };
+  });
+  </script>
+</body>
+</html>
